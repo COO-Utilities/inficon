@@ -14,7 +14,7 @@ You can also use the `INFICON` module interactively from a Python terminal or sc
 
 ```python
 import asyncio
-from hispec.util.inficon import InficonVGC502
+from inficonvgc502 import InficonVGC502
 
 async def test_read():
     async with InficonVGC502("127.0.0.1", 8000) as inficon:
