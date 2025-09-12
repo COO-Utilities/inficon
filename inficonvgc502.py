@@ -9,7 +9,7 @@ import logging
 class InficonVGC502:
     """Class for interfacing with InficonVGC502"""
     def __init__(self, address, port, timeout=1, log=True, quiet=False):
-        # pylint: disable=too-many-arguments
+        # pylint: disable=too-many-positional-arguments, too-many-arguments
         self.address = address
         self.port = int(port)
         self.timeout = timeout
