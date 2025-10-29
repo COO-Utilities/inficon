@@ -3,19 +3,13 @@ import time
 import sys
 import json
 import logging
-import asyncio
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
 from urllib3.exceptions import ReadTimeoutError
-import inficonvgc502
+from inficonvgc502 import InficonVGC502
+
 
 # cfg_file = files('scripts'), 'influxdb_config.json')
-
-async def get_data(device_host: str, device_port: int, gno: int):
-    """Get data from Onewire asynchronously"""
-    async with inficonvgc502.InficonVGC502(device_host, device_port) as inficon:
-        pressure = await inficon.read_pressure(gauge=gno)
-    return pressure
 
 def main(config_file):
     """Query user for setup info and start logging to InfluxDB."""
@@ -42,6 +36,10 @@ def main(config_file):
     else:
         logger = None
 
+    # Connect to device
+    vgc = InficonVGC502(cfg['device_host'], cfg['device_port'])
+    vgc.connect()
+
     # get channels to log
     channels = cfg['log_channels']
 
@@ -66,8 +64,7 @@ def main(config_file):
                         print("Connecting to Inficon controller...")
                     if logger:
                         logger.info('Connecting to Inficon controller...')
-                    pressure = asyncio.run(
-                        get_data(cfg['device_host'], cfg['device_port'], int(chan)))
+                    pressure = vgc.read_pressure(int(chan))
                     point = (
                         Point("inficon")
                         .field(channels[chan]['field']+chan, pressure)
