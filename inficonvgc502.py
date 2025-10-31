@@ -4,9 +4,10 @@ Inficon VGC502 Controller Interface
 import sys
 import socket
 import logging
+from hardware_device_base import HardwareDeviceBase
 
 
-class InficonVGC502:
+class InficonVGC502(HardwareDeviceBase):
     """Class for interfacing with InficonVGC502"""
 
     def __init__(self, address, port, timeout=1, log=True, quiet=False):
@@ -95,7 +96,8 @@ class InficonVGC502:
             raise
 
     def read_pressure(self, gauge: int = 1) -> float:
-        """Read pressure from gauge 1..n. Returns float, or sys.float_info.max on timeout/parse error."""
+        """Read pressure from gauge 1..n.
+        Returns float, or sys.float_info.max on timeout/parse error."""
         # pylint: disable=too-many-branches
         if not isinstance(gauge, int) or gauge < 1:
             raise ValueError("gauge must be a positive integer")
