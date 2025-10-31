@@ -1,6 +1,6 @@
+# tests/test_inficonvgc502_units_sync.py
 import pytest
-import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import MagicMock, call
 
 from inficonvgc502 import InficonVGC502, UnknownResponse
 
@@ -11,65 +11,50 @@ def vgc502():
     return InficonVGC502(address="127.0.0.1", port=8000, log=False)
 
 
-@pytest.mark.asyncio
-async def test_set_pressure_unit_success(vgc502):
-    # Mock reader and writer
-    vgc502.reader = AsyncMock()
-    vgc502.writer = AsyncMock()
+def test_set_pressure_unit_success(vgc502):
+    # Mock low-level I/O so we don't need a real socket
+    vgc502._sendall = MagicMock()
+    # Device replies ACK (\x06\r\n)
+    vgc502._read_until = MagicMock(return_value=b"\x06\r\n")
 
-    # Mock the device responding with ACK (\x06\r\n)
-    vgc502.reader.readuntil = AsyncMock(return_value=b'\x06\r\n')
-
-    # Call set_pressure_unit
-    result = await vgc502.set_pressure_unit(2)  # Pascal
+    # Pascal (example: 2)
+    result = vgc502.set_pressure_unit(2)
     assert result is True
 
     # Verify the command was sent
-    vgc502.writer.write.assert_any_call(b'UNI,2\r\n')
+    vgc502._sendall.assert_called_with(b"UNI,2\r\n")
 
 
-@pytest.mark.asyncio
-async def test_set_pressure_unit_invalid_value(vgc502):
+def test_set_pressure_unit_invalid_value(vgc502):
     with pytest.raises(ValueError):
-        await vgc502.set_pressure_unit(9)  # Invalid unit
+        vgc502.set_pressure_unit(9)  # out of allowed range
 
 
-@pytest.mark.asyncio
-async def test_set_pressure_unit_unexpected_response(vgc502):
-    vgc502.reader = AsyncMock()
-    vgc502.writer = AsyncMock()
-
-    # Mock the device responding with something other than ACK
-    vgc502.reader.readuntil = AsyncMock(return_value=b'\x15\r\n')
+def test_set_pressure_unit_unexpected_response(vgc502):
+    vgc502._sendall = MagicMock()
+    # Device replies NAK or anything not ACK; original test expected UnknownResponse
+    vgc502._read_until = MagicMock(return_value=b"\x15\r\n")
 
     with pytest.raises(UnknownResponse):
-        await vgc502.set_pressure_unit(1)
+        vgc502.set_pressure_unit(1)
 
 
-@pytest.mark.asyncio
-async def test_get_pressure_unit(vgc502):
-    vgc502.reader = AsyncMock()
-    vgc502.writer = AsyncMock()
+def test_get_pressure_unit(vgc502):
+    vgc502._sendall = MagicMock()
+    # First read: ACK to 'UNI\r\n'; Second read: the unit value line '3\r\n'
+    vgc502._read_until = MagicMock(side_effect=[b"\x06\r\n", b"3\r\n"])
 
-    # Simulate device sending '3\r\n' for Micron
-    vgc502.reader.readuntil = AsyncMock(return_value=b'3\r\n')
-
-    result = await vgc502.get_pressure_unit()
+    result = vgc502.get_pressure_unit()
     assert result == 3
 
-    # Ensure UNI and ENQ were written
-    vgc502.writer.write.assert_any_call(b'UNI\r\n')
-    vgc502.writer.write.assert_any_call(b'\x05')
+    # Ensure UNI and ENQ were written (order matters)
+    vgc502._sendall.assert_has_calls([call(b"UNI\r\n"), call(b"\x05")])
 
 
-@pytest.mark.asyncio
-async def test_get_pressure_unit_invalid_response(vgc502):
-    vgc502.reader = AsyncMock()
-    vgc502.writer = AsyncMock()
-
-    # Simulate invalid response
-    vgc502.reader.readuntil = AsyncMock(return_value=b'X\r\n')
+def test_get_pressure_unit_invalid_response(vgc502):
+    vgc502._sendall = MagicMock()
+    # ACK followed by a non-integer value
+    vgc502._read_until = MagicMock(side_effect=[b"\x06\r\n", b"X\r\n"])
 
     with pytest.raises(ValueError):
-        # This will raise when trying to convert 'X' to int
-        await vgc502.get_pressure_unit()
+        vgc502.get_pressure_unit()
