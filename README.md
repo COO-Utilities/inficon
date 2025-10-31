@@ -1,25 +1,43 @@
 # InficonVGC502 
 
-A Python 3 module to communicate with an INFICONVGC502 controller over TCP. It supports reading pressure values from one or more gauges using an easy-to-use `async with` interface.
+A Python 3 module to communicate with an INFICONVGC502 controller over TCP.
+It supports reading pressure values from one or more gauges.
+
+## Currently Supported Models
+- VGC501, VGC502
+
+## Features
+- Connect to VGC controller
+- Read out the pressure
 
 ## 🛠️ Requirements
 
 - Python 3.7+
-- No third-party packages required (pure standard library)
+- Install base class from https://github.com/COO-Utilities/hardware_device_base
 
+## Installation
 
-### 🧪 Running from a Python Terminal
+```bash
+pip install .
+```
+
+## 🧪 Running from a Python Terminal
 
 You can also use the `INFICON` module interactively from a Python terminal or script:
 
 ```python
-import asyncio
 from inficonvgc502 import InficonVGC502
 
-async def test_read():
-    async with InficonVGC502("127.0.0.1", 8000) as inficon:
-        pressure = await inficon.read_pressure(gauge=1)
-        print(f"Pressure: {pressure} Torr")
+vgc502 = InficonVGC502()
+pressure = vgc502.get_atomic_value("pressure")
+print(f"Pressure: {pressure} Torr")
+```
 
-asyncio.run(test_read())
+## Testing
+Unit tests are in the `tests/` directory.
+
+To run all tests from the projecgt root:
+
+```bash
+python -m pytest
 ```
