@@ -128,7 +128,7 @@ class InficonVGC502(HardwareDeviceBase):
     def _read_reply(self) -> Union[str, None]:
         """Read reply from controller."""
         try:
-            ack = self._read_until(b"\r\n")
+            ack = self._read_until(b"\r\n").strip()
             self.logger.debug("Reply received: %r", ack)
         except socket.timeout:
             return None
