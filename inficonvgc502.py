@@ -106,7 +106,7 @@ class InficonVGC502(HardwareDeviceBase):
             # raise IOError(f"Failed to send ENQ: {ex}") from ex
         return True
 
-    def _read_until(self, terminator: bytes = b"\r\n", max_bytes: int = 4096) -> str:
+    def _read_until(self, terminator: bytes = b"\r\n", max_bytes: int = 4096) -> bytes:
         """Read until 'terminator' or timeout. Returns bytes including the terminator."""
         buf = bytearray()
         try:
@@ -120,7 +120,8 @@ class InficonVGC502(HardwareDeviceBase):
                     break
                 if len(buf) >= max_bytes:
                     break
-            return buf.decode().strip()
+                self.logger.debug("Input buffer: %r", buf)
+            return bytes(buf)
         except Exception as ex:
             raise IOError(f"Failed to _read_reply: {ex}") from ex
 
@@ -128,7 +129,7 @@ class InficonVGC502(HardwareDeviceBase):
         """Read reply from controller."""
         try:
             ack = self._read_until(b"\r\n")
-            self.logger.debug("Reply received: %s", ack)
+            self.logger.debug("Reply received: %r", ack)
         except socket.timeout:
             return None
 
@@ -137,7 +138,7 @@ class InficonVGC502(HardwareDeviceBase):
             self.logger.debug("ACK received, sending ENQ")
             try:
                 if self._send_enq():
-                    response = self._read_until(b"\r\n").strip()
+                    response = self._read_until(b"\r\n").decode().strip()
                 else:
                     self.logger.error("Error sending ENQ")
                     return None
@@ -209,7 +210,7 @@ class InficonVGC502(HardwareDeviceBase):
             parts = response.split(",")
             value = float(parts[1])
             return value
-        except (IndexError, ValueError) as e:
+        except (IndexError, ValueError, AttributeError) as e:
             self.logger.error("Failed to parse response: %s", e)
             return sys.float_info.max
 
