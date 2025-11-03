@@ -22,6 +22,11 @@ class InficonVGC502(HardwareDeviceBase):
         """
         super().__init__(log, logfile)
         self.timeout = timeout
+        self.type = ""
+        self.model = ""
+        self.serial_number = None
+        self.firmware_version = ""
+        self.hardware_version = ""
         self.sock: socket.socket | None = None
 
     def connect(self, *args, con_type="tcp") -> None:
@@ -158,6 +163,23 @@ class InficonVGC502(HardwareDeviceBase):
             self.logger.error("ACK NOT received")
         return None
 
+    def initialize(self):
+        """Initialize the controller."""
+        self.logger.debug("Initializing controller")
+        if self._send_command("PNR"):
+            devinfo = self._read_reply()
+            dev_items = devinfo.split(",")
+            if len(dev_items) == 5:
+                self.type = dev_items[0]
+                self.model = dev_items[1]
+                self.serial_number = int(dev_items[2])
+                self.firmware_version = dev_items[3]
+                self.hardware_version = dev_items[4]
+            else:
+                self.logger.error("Error initializing controller: %s", devinfo)
+        else:
+            self.logger.error("Failed to initialize controller")
+
     def set_pressure_unit(self, unit_code: int =1) -> bool:
         """ Set the pressure units
         :param unit_code: (int) Pressure unit code
@@ -251,8 +273,12 @@ class InficonVGC502(HardwareDeviceBase):
                 float: Current value, or NaN if invalid.
         """
         if "pressure" in item:
-            gauge_num = int(item.split("pressure")[-1])
-            value = self.read_pressure(gauge=gauge_num)
+            try:
+                gauge_num = int(item.split("pressure")[-1])
+                value = self.read_pressure(gauge=gauge_num)
+            except ValueError:
+                self.logger.error("Invalid item: %s", item)
+                value = sys.float_info.max
         elif "temperature" in item:
             value = float(self.read_temperature())
         else:
