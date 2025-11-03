@@ -11,6 +11,9 @@ from hardware_device_base import HardwareDeviceBase
 
 class InficonVGC502(HardwareDeviceBase):
     """Class for interfacing with InficonVGC502"""
+    # pylint: disable=too-many-instance-attributes
+
+    UNIT_CODES = ("mbar", "Torr", "Pascal", "Micron", "hPascal", "Volt")
 
     def __init__(self, log: bool=True, logfile: str =__name__.rsplit('.', 1)[-1],
                  timeout: int=1):
@@ -27,6 +30,7 @@ class InficonVGC502(HardwareDeviceBase):
         self.serial_number = None
         self.firmware_version = ""
         self.hardware_version = ""
+        self.pressure_units = ""
         self.sock: socket.socket | None = None
 
     def connect(self, *args, con_type="tcp") -> None:
@@ -166,6 +170,10 @@ class InficonVGC502(HardwareDeviceBase):
     def initialize(self):
         """Initialize the controller."""
         self.logger.debug("Initializing controller")
+        if self._send_command("UNI"):
+            unit_code = int(self._read_reply())
+            if 0 <= unit_code <= 5:
+                self.pressure_units = self.UNIT_CODES[unit_code]
         if self._send_command("AYT"):
             devinfo = self._read_reply()
             dev_items = devinfo.split(",")
@@ -195,9 +203,13 @@ class InficonVGC502(HardwareDeviceBase):
             if self._send_command(f"UNI,{unit_code}"):
                 received = int(self._read_reply())
                 if received != unit_code:
-                    self.logger.error("Requested unit code not achieved: %d", received)
+                    self.logger.error("Requested pressure unit code not achieved: %d", received)
                 else:
                     retval = True
+                if 0 <= received <= 5:
+                    self.pressure_units = self.UNIT_CODES[received]
+                else:
+                    self.logger.error("Invalid pressure unit received: %d", received)
             else:
                 retval = False
         return retval
@@ -206,6 +218,7 @@ class InficonVGC502(HardwareDeviceBase):
         """ Get the pressure units"""
         if self._send_command("UNI"):
             received = int(self._read_reply())
+            self.pressure_units = self.UNIT_CODES[received]
         else:
             received = None
         return received
