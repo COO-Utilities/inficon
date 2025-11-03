@@ -86,6 +86,7 @@ class InficonVGC502(HardwareDeviceBase):
         """
         try:
             self.logger.debug("Sending command: %s", command)
+            command += "\r\n"
             with self.lock:
                 self.sock.sendall(command.encode())
         except Exception as ex:
@@ -187,6 +188,27 @@ class InficonVGC502(HardwareDeviceBase):
             received = None
         return received
 
+    def read_temperature(self) -> float:
+        """ Read temperature from controller."""
+        command = "TMP"
+        try:
+            self._send_command(command)
+        except DeviceConnectionError:
+            self.logger.error("Connection error: %s", command)
+            raise
+        except OSError as e:
+            self.logger.error("Failed to send command: %s", e)
+            raise DeviceConnectionError("Write failed") from e
+
+        response = self._read_reply()
+        self.logger.debug("Temperature response: %s", response)
+        try:
+            value = float(response)
+            return value
+        except ValueError as e:
+            self.logger.error("Failed to parse response: %s", e)
+            return sys.float_info.max
+
     def read_pressure(self, gauge: int = 1) -> float:
         """Read pressure from gauge 1 to n.
         Returns float, or sys.float_info.max on timeout/parse error."""
@@ -194,8 +216,8 @@ class InficonVGC502(HardwareDeviceBase):
         if not isinstance(gauge, int) or gauge < 1:
             raise ValueError("gauge must be a positive integer")
 
-        # Command format: PR{gauge}\r\n
-        command = f"PR{gauge}\r\n"
+        # Command format: PR{gauge}
+        command = f"PR{gauge}"
         try:
             self._send_command(command)
         except DeviceConnectionError:
@@ -228,8 +250,11 @@ class InficonVGC502(HardwareDeviceBase):
             Returns:
                 float: Current value, or NaN if invalid.
         """
-        if item == "pressure":
-            value = self.read_pressure()
+        if "pressure" in item:
+            gauge_num = int(item.split("pressure")[-1])
+            value = self.read_pressure(gauge=gauge_num)
+        elif "temperature" in item:
+            value = float(self.read_temperature())
         else:
             self.logger.error("Unknown item received: %r", item)
             value = sys.float_info.max
@@ -241,7 +266,7 @@ class InficonVGC502(HardwareDeviceBase):
             cmd = input("> ")
             if not cmd:
                 break
-            cmd += "\r\n"
+
             if self._send_command(cmd):
                 ret = self._read_reply()
                 print(ret)
