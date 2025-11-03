@@ -183,7 +183,7 @@ class InficonVGC502(HardwareDeviceBase):
         return received
 
     def read_pressure(self, gauge: int = 1) -> float:
-        """Read pressure from gauge 1..n.
+        """Read pressure from gauge 1 to n.
         Returns float, or sys.float_info.max on timeout/parse error."""
         # pylint: disable=too-many-branches
         if not isinstance(gauge, int) or gauge < 1:
@@ -229,6 +229,19 @@ class InficonVGC502(HardwareDeviceBase):
             self.logger.error("Unknown item received: %r", item)
             value = sys.float_info.max
         return value
+
+    def run_manually(self):
+        """Input commands manually."""
+        while True:
+            cmd = input("> ")
+            if not cmd:
+                break
+
+            if self._send_command(cmd):
+                ret = self._read_reply()
+                print(ret)
+
+        print("End.")
 
 class WrongCommandError(Exception):
     """Exception raised when a wrong command is sent."""
