@@ -4,6 +4,7 @@ Inficon VGC502 Controller Interface
 import sys
 import socket
 from errno import EISCONN
+from typing import Union
 
 from hardware_device_base import HardwareDeviceBase
 
@@ -88,10 +89,24 @@ class InficonVGC502(HardwareDeviceBase):
             with self.lock:
                 self.sock.sendall(command.encode())
         except Exception as ex:
-            raise IOError(f"Failed to send command: {ex}") from ex
+            self.logger.error("Failed to send command: %s", ex)
+            return False
+            # raise IOError(f"Failed to send command: {ex}") from ex
         return True
 
-    def _read_reply(self, terminator: bytes = b"\r\n", max_bytes: int = 4096) -> str:
+    def _send_enq(self):
+        """Send ENQ to the controller."""
+        try:
+            self.logger.debug("Sending ENQ to controller")
+            with self.lock:
+                self.sock.sendall(b"\x05")
+        except Exception as ex:
+            self.logger.error("Failed to send ENQ: %s", ex)
+            return False
+            # raise IOError(f"Failed to send ENQ: {ex}") from ex
+        return True
+
+    def _read_until(self, terminator: bytes = b"\r\n", max_bytes: int = 4096) -> str:
         """Read until 'terminator' or timeout. Returns bytes including the terminator."""
         buf = bytearray()
         try:
@@ -109,6 +124,34 @@ class InficonVGC502(HardwareDeviceBase):
         except Exception as ex:
             raise IOError(f"Failed to _read_reply: {ex}") from ex
 
+    def _read_reply(self) -> Union[str, None]:
+        """Read reply from controller."""
+        try:
+            ack = self._read_until(b"\r\n")
+            self.logger.debug("Reply received: %s", ack)
+        except socket.timeout:
+            return None
+
+        # Accept bare control char or control char followed by CRLF
+        if ack == b"\x06":
+            self.logger.debug("ACK received, sending ENQ")
+            try:
+                if self._send_enq():
+                    response = self._read_until(b"\r\n").strip()
+                else:
+                    self.logger.error("Error sending ENQ")
+                    return None
+            except socket.timeout:
+                return None
+            except OSError as e:
+                self.logger.error("IO error while receiving response: %s", e)
+                return None
+
+            self.logger.debug("Response received: %s", response)
+            return response
+        self.logger.error("ACK NOT received")
+        return None
+
     def set_pressure_unit(self, unit_code: int =1) -> bool:
         """ Set the pressure units
         :param unit_code: (int) Pressure unit code
@@ -121,18 +164,22 @@ class InficonVGC502(HardwareDeviceBase):
             self.logger.error("Invalid pressure unit code: %s\nMust be between 0 and 5 inclusive",
                               unit_code)
         else:
-            self._send_command(f"UNI,{unit_code}")
-            received = int(self._read_reply(b"\r\n"))
-            if received != unit_code:
-                self.logger.error("Requested unit code not achieved: %d", received)
+            if self._send_command(f"UNI,{unit_code}"):
+                received = int(self._read_reply())
+                if received != unit_code:
+                    self.logger.error("Requested unit code not achieved: %d", received)
+                else:
+                    retval = True
             else:
-                retval = True
+                retval = False
         return retval
 
     def get_pressure_unit(self) -> int:
         """ Get the pressure units"""
-        self._send_command("UNI")
-        received = int(self._read_reply(b"\r\n"))
+        if self._send_command("UNI"):
+            received = int(self._read_reply())
+        else:
+            received = None
         return received
 
     def read_pressure(self, gauge: int = 1) -> float:
@@ -154,43 +201,17 @@ class InficonVGC502(HardwareDeviceBase):
             raise DeviceConnectionError("Write failed") from e
 
         # Read acknowledgment line (controller typically replies with ACK/NAK ending CRLF)
+        response = self._read_reply()
+        self.logger.debug("Pressure response: %s", response)
+
+        # Expected like: "PR1,<value>"
         try:
-            acknowledgment = self._read_reply(b"\r\n")
-            self.logger.debug("Acknowledgment received: %r", acknowledgment)
-        except socket.timeout:
-            # match original behavior: return max float on timeout
+            parts = response.split(",")
+            value = float(parts[1])
+            return value
+        except (IndexError, ValueError) as e:
+            self.logger.error("Failed to parse response: %s", e)
             return sys.float_info.max
-
-        # Accept bare control char or control char followed by CRLF
-        if acknowledgment == "\x06":  # ACK
-            self.logger.debug("ACK received, sending ENQ")
-            try:
-                self._send_command("\x05")  # ENQ
-                response = self._read_reply(b"\r\n")
-            except socket.timeout:
-                return sys.float_info.max
-            except OSError as e:
-                if self.logger:
-                    self.logger.error("IO error while receiving response: %s", e)
-                return sys.float_info.max
-
-            self.logger.debug("Pressure response: %s", response)
-
-            # Expected like: "PR1,<value>"
-            try:
-                parts = response.split(",")
-                value = float(parts[1])
-                return value
-            except (IndexError, ValueError) as e:
-                self.logger.error("Failed to parse response: %s", e)
-                return sys.float_info.max
-
-        if acknowledgment == "\x15":  # NAK
-            self.logger.error("Received NAK: Wrong command")
-            raise WrongCommandError("Wrong command sent.")
-
-        self.logger.error("Unknown acknowledgment: %r", acknowledgment)
-        raise UnknownResponse(f"Unknown response: {acknowledgment!r}")
 
     def get_atomic_value(self, item: str ="") -> float:
         """
