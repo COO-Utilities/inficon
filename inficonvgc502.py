@@ -294,6 +294,9 @@ class InficonVGC502(HardwareDeviceBase):
                 value = sys.float_info.max
         elif "temperature" in item:
             value = float(self.read_temperature())
+        elif "units" in item:
+            self.get_pressure_unit()
+            value = self.pressure_units
         else:
             self.logger.error("Unknown item received: %r", item)
             value = sys.float_info.max
