@@ -120,7 +120,7 @@ class InficonVGC502(HardwareDeviceBase):
                     break
                 if len(buf) >= max_bytes:
                     break
-                self.logger.debug("Input buffer: %r", buf)
+                # self.logger.debug("Input buffer: %r", buf)
             return bytes(buf)
         except Exception as ex:
             raise IOError(f"Failed to _read_reply: {ex}") from ex
@@ -237,7 +237,7 @@ class InficonVGC502(HardwareDeviceBase):
             cmd = input("> ")
             if not cmd:
                 break
-
+            cmd += "\r\n"
             if self._send_command(cmd):
                 ret = self._read_reply()
                 print(ret)
