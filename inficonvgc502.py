@@ -133,7 +133,7 @@ class InficonVGC502(HardwareDeviceBase):
         except socket.timeout:
             return None
 
-        # Accept bare control char or control char followed by CRLF
+        # ACK received
         if ack == b"\x06":
             self.logger.debug("ACK received, sending ENQ")
             try:
@@ -150,7 +150,11 @@ class InficonVGC502(HardwareDeviceBase):
 
             self.logger.debug("Response received: %s", response)
             return response
-        self.logger.error("ACK NOT received")
+
+        if ack == b'\x15':
+            self.logger.error("NAK received, try command again.")
+        else:
+            self.logger.error("ACK NOT received")
         return None
 
     def set_pressure_unit(self, unit_code: int =1) -> bool:
