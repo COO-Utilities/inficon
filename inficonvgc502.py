@@ -166,7 +166,7 @@ class InficonVGC502(HardwareDeviceBase):
     def initialize(self):
         """Initialize the controller."""
         self.logger.debug("Initializing controller")
-        if self._send_command("PNR"):
+        if self._send_command("AYT"):
             devinfo = self._read_reply()
             dev_items = devinfo.split(",")
             if len(dev_items) == 5:
