@@ -29,7 +29,8 @@ You can also use the `INFICON` module interactively from a Python terminal or sc
 from inficonvgc502 import InficonVGC502
 
 vgc502 = InficonVGC502()
-pressure = vgc502.get_atomic_value("pressure")
+vgc502.initialize()
+pressure = vgc502.get_atomic_value("pressure1") # must have gauge number
 print(f"Pressure: {pressure} Torr")
 ```
 
