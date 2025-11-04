@@ -257,6 +257,8 @@ class InficonVGC502(HardwareDeviceBase):
         """Read pressure from gauge 1 to n.
         Returns float, or sys.float_info.max on timeout/parse error."""
         # pylint: disable=too-many-branches
+        if self.n_gauges == 0:
+            self.initialize()
         if not isinstance(gauge, int) or gauge < 1 or gauge > self.n_gauges:
             self.logger.error("gauge number must be between 1 and %d, inclusive", self.n_gauges)
             return sys.float_info.max
