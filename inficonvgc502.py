@@ -258,7 +258,7 @@ class InficonVGC502(HardwareDeviceBase):
         Returns float, or sys.float_info.max on timeout/parse error."""
         # pylint: disable=too-many-branches
         if not isinstance(gauge, int) or gauge < 1 or gauge > self.n_gauges:
-            self.logger.error("gauge number must be between 1 and %d", self.n_gauges)
+            self.logger.error("gauge number must be between 1 and %d, inclusive", self.n_gauges)
             return sys.float_info.max
 
         # Command format: PR{gauge}
