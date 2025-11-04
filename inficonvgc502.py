@@ -31,6 +31,7 @@ class InficonVGC502(HardwareDeviceBase):
         self.firmware_version = ""
         self.hardware_version = ""
         self.pressure_units = ""
+        self.n_gauges = 0
         self.sock: socket.socket | None = None
 
     def connect(self, *args, con_type="tcp") -> None:
@@ -183,6 +184,14 @@ class InficonVGC502(HardwareDeviceBase):
                 self.serial_number = int(dev_items[2])
                 self.firmware_version = dev_items[3]
                 self.hardware_version = dev_items[4]
+                if "501" in self.type:
+                    self.n_gauges = 1
+                elif "502" in self.type:
+                    self.n_gauges = 2
+                elif "503" in self.type:
+                    self.n_gauges = 3
+                else:
+                    self.logger.error("Unknown type received: %s", self.type)
             else:
                 self.logger.error("Error initializing controller: %s", devinfo)
         else:
@@ -248,8 +257,9 @@ class InficonVGC502(HardwareDeviceBase):
         """Read pressure from gauge 1 to n.
         Returns float, or sys.float_info.max on timeout/parse error."""
         # pylint: disable=too-many-branches
-        if not isinstance(gauge, int) or gauge < 1:
-            raise ValueError("gauge must be a positive integer")
+        if not isinstance(gauge, int) or gauge < 1 or gauge > self.n_gauges:
+            self.logger.error("gauge number must be between 1 and %d", self.n_gauges)
+            return sys.float_info.max
 
         # Command format: PR{gauge}
         command = f"PR{gauge}"
