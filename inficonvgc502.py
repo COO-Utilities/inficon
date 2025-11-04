@@ -184,14 +184,11 @@ class InficonVGC502(HardwareDeviceBase):
                 self.serial_number = int(dev_items[2])
                 self.firmware_version = dev_items[3]
                 self.hardware_version = dev_items[4]
-                if "501" in self.type:
-                    self.n_gauges = 1
-                elif "502" in self.type:
-                    self.n_gauges = 2
-                elif "503" in self.type:
-                    self.n_gauges = 3
-                else:
-                    self.logger.error("Unknown type received: %s", self.type)
+                try:
+                    self.n_gauges = int(self.type[-1])
+                except ValueError:
+                    self.logger.error("Invalid gauge type, unable to parse n_gauges: %s", self.type)
+                    self.n_gauges = 0
             else:
                 self.logger.error("Error initializing controller: %s", devinfo)
         else:
