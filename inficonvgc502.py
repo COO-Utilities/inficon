@@ -289,7 +289,7 @@ class InficonVGC502(HardwareDeviceBase):
             Read the latest value of a specific channel.
 
             Args:
-                item (str): Channel name (e.g., "3A", "Out1")
+                item (str): Channel name (e.g., "pressure1")
 
             Returns:
                 float: Current value, or NaN if invalid.
