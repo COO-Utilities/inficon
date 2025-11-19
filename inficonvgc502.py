@@ -6,10 +6,10 @@ import socket
 from errno import EISCONN
 from typing import Union
 
-from hardware_device_base import HardwareDeviceBase
+from hardware_device_base.hardware_sensor_base import HardwareSensorBase
 
 
-class InficonVGC502(HardwareDeviceBase):
+class InficonVGC502(HardwareSensorBase):
     """Class for interfacing with InficonVGC502"""
     # pylint: disable=too-many-instance-attributes
 
@@ -34,17 +34,15 @@ class InficonVGC502(HardwareDeviceBase):
         self.n_gauges = 0
         self.sock: socket.socket | None = None
 
-    def connect(self, *args, con_type="tcp") -> None:
+    def connect(self, host, port, con_type="tcp") -> None:  # pylint: disable=W0221
         """ Connect to the controller. """
-        if self.validate_connection_params(args):
+        if self.validate_connection_params((host, port)):
             if con_type == "tcp":
-                host = args[0]
-                port = args[1]
                 if self.sock is None:
                     self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 try:
                     self.sock.connect((host, port))
-                    self.logger.info("Connected to %s:%d", host, port)
+                    self.report_info(f"Connected to {host}:{port}")
                     self._set_connected(True)
                     # ensure subsequent ops also use timeout
                     self.sock.settimeout(self.timeout)
@@ -54,18 +52,19 @@ class InficonVGC502(HardwareDeviceBase):
                         self.logger.info("Already connected")
                         self._set_connected(True)
                     else:
-                        self.logger.error("Connection error: %s", e.strerror)
+                        self.report_error(f"Connection error: {e.strerror}")
                         self._set_connected(False)
+                # clear socket
                 if self.is_connected():
                     self._clear_socket()
             elif con_type == "serial":
-                self.logger.error("Serial connection not supported")
+                self.report_error("Serial connection not supported")
             else:
-                self.logger.error("Unknown con_type: %s", con_type)
+                self.report_error(f"Unknown con_type: {con_type}")
         else:
-            self.logger.error("Invalid connection arguments: %s", args)
+            self.report_error(f"Invalid connection arguments: {host}:{port}")
 
-    def _clear_socket(self):
+    def _clear_socket(self) -> None:
         """Clear the socket connection."""
         if self.sock:
             self.sock.setblocking(False)
@@ -76,7 +75,7 @@ class InficonVGC502(HardwareDeviceBase):
                     break
             self.sock.setblocking(True)
 
-    def disconnect(self):
+    def disconnect(self) -> None:
         """Close the TCP connection."""
         try:
             self.logger.debug("Closing connection to controller")
@@ -86,35 +85,36 @@ class InficonVGC502(HardwareDeviceBase):
         except Exception as ex:
             raise IOError(f"Failed to close connection: {ex}") from ex
 
-    def _send_command(self, command: str, *args) -> bool:
+    def _send_command(self, command: str) -> bool:  # pylint: disable=W0221
         """
         Send a command to the controller.
 
         :param command: (str) Command to send.
-        :param args: Arguments to send.
         :return: True on success, False on failure.
         """
+        if not self.is_connected():
+            self.report_error("Controller not connected")
+            return False
         try:
             self.logger.debug("Sending command: %s", command)
             command += "\r\n"
             with self.lock:
                 self.sock.sendall(command.encode())
         except Exception as ex:
-            self.logger.error("Failed to send command: %s", ex)
-            return False
-            # raise IOError(f"Failed to send command: {ex}") from ex
+            self.report_error(f"Failed to send command: {ex}")
+            raise IOError(f"Failed to send command: {ex}") from ex
+        self.logger.debug("Command sent")
         return True
 
-    def _send_enq(self):
+    def _send_enq(self) -> bool:
         """Send ENQ to the controller."""
         try:
             self.logger.debug("Sending ENQ to controller")
             with self.lock:
                 self.sock.sendall(b"\x05")
         except Exception as ex:
-            self.logger.error("Failed to send ENQ: %s", ex)
-            return False
-            # raise IOError(f"Failed to send ENQ: {ex}") from ex
+            self.report_error(f"Failed to send ENQ: {ex}")
+            raise IOError(f"Failed to send ENQ: {ex}") from ex
         return True
 
     def _read_until(self, terminator: bytes = b"\r\n", max_bytes: int = 4096) -> bytes:
@@ -134,41 +134,46 @@ class InficonVGC502(HardwareDeviceBase):
                 # self.logger.debug("Input buffer: %r", buf)
             return bytes(buf)
         except Exception as ex:
-            raise IOError(f"Failed to _read_reply: {ex}") from ex
+            raise IOError(f"Failed to _read_until: {ex}") from ex
 
     def _read_reply(self) -> Union[str, None]:
         """Read reply from controller."""
-        try:
-            ack = self._read_until(b"\r\n").strip()
-            self.logger.debug("Reply received: %r", ack)
-        except socket.timeout:
-            return None
-
-        # ACK received
-        if ack == b"\x06":
-            self.logger.debug("ACK received, sending ENQ")
-            try:
-                if self._send_enq():
-                    response = self._read_until(b"\r\n").decode().strip()
-                else:
-                    self.logger.error("Error sending ENQ")
-                    return None
-            except socket.timeout:
-                return None
-            except OSError as e:
-                self.logger.error("IO error while receiving response: %s", e)
-                return None
-
-            self.logger.debug("Response received: %s", response)
-            return response
-
-        if ack == b'\x15':
-            self.logger.error("NAK received, try command again.")
+        if not self.is_connected():
+            self.report_error("Controller not connected")
         else:
-            self.logger.error("ACK NOT received")
+            try:
+                ack = self._read_until(b"\r\n").strip()
+                self.logger.debug("Reply received: %r", ack)
+            except socket.timeout:
+                self.report_error("Socket timeout")
+                return None
+
+            # ACK received
+            if ack == b"\x06":
+                self.logger.debug("ACK received, sending ENQ")
+                try:
+                    if self._send_enq():
+                        response = self._read_until(b"\r\n").decode().strip()
+                    else:
+                        self.report_error("Error sending ENQ")
+                        return None
+                except socket.timeout:
+                    self.report_error("Socket timeout")
+                    return None
+                except OSError as e:
+                    self.report_error(f"IO error while receiving response: {e}")
+                    return None
+
+                self.logger.debug("Response received: %s", response)
+                return response
+
+            if ack == b'\x15':
+                self.report_warning("NAK received, try command again.")
+            else:
+                self.report_error("ACK NOT received")
         return None
 
-    def initialize(self):
+    def initialize(self) -> None:
         """Initialize the controller."""
         self.logger.debug("Initializing controller")
         if self._send_command("UNI"):
@@ -187,12 +192,12 @@ class InficonVGC502(HardwareDeviceBase):
                 try:
                     self.n_gauges = int(self.type[-1])
                 except ValueError:
-                    self.logger.error("Invalid gauge type, unable to parse n_gauges: %s", self.type)
+                    self.report_error(f"Invalid gauge type, unable to parse n_gauges: {self.type}")
                     self.n_gauges = 0
             else:
-                self.logger.error("Error initializing controller: %s", devinfo)
+                self.report_error(f"Error initializing controller: {devinfo}")
         else:
-            self.logger.error("Failed to initialize controller")
+            self.report_error("Failed to initialize controller")
 
     def set_pressure_unit(self, unit_code: int =1) -> bool:
         """ Set the pressure units
@@ -203,19 +208,18 @@ class InficonVGC502(HardwareDeviceBase):
         """
         retval = False
         if unit_code < 0 or unit_code > 5:
-            self.logger.error("Invalid pressure unit code: %s\nMust be between 0 and 5 inclusive",
-                              unit_code)
+            self.report_error(f"Unit code not between 0 and 5 inclusive: {unit_code}")
         else:
             if self._send_command(f"UNI,{unit_code}"):
                 received = int(self._read_reply())
                 if received != unit_code:
-                    self.logger.error("Requested pressure unit code not achieved: %d", received)
+                    self.report_error(f"Requested pressure unit code not achieved: {received}")
                 else:
                     retval = True
                 if 0 <= received <= 5:
                     self.pressure_units = self.UNIT_CODES[received]
                 else:
-                    self.logger.error("Invalid pressure unit received: %d", received)
+                    self.report_error(f"Invalid pressure unit received: {received}")
             else:
                 retval = False
         return retval
@@ -235,10 +239,10 @@ class InficonVGC502(HardwareDeviceBase):
         try:
             self._send_command(command)
         except DeviceConnectionError:
-            self.logger.error("Connection error: %s", command)
+            self.report_error(f"Connection error: {command}")
             raise
         except OSError as e:
-            self.logger.error("Failed to send command: %s", e)
+            self.report_error(f"Failed to send command: {e}")
             raise DeviceConnectionError("Write failed") from e
 
         response = self._read_reply()
@@ -247,7 +251,7 @@ class InficonVGC502(HardwareDeviceBase):
             value = float(response)
             return value
         except ValueError as e:
-            self.logger.error("Failed to parse response: %s", e)
+            self.report_error(f"Failed to parse response: {e}")
             return sys.float_info.max
 
     def read_pressure(self, gauge: int = 1) -> float:
@@ -257,7 +261,7 @@ class InficonVGC502(HardwareDeviceBase):
         if self.n_gauges == 0:
             self.initialize()
         if not isinstance(gauge, int) or gauge < 1 or gauge > self.n_gauges:
-            self.logger.error("gauge number must be between 1 and %d, inclusive", self.n_gauges)
+            self.report_error(f"gauge number must be between 1 and {self.n_gauges}, inclusive")
             return sys.float_info.max
 
         # Command format: PR{gauge}
@@ -265,10 +269,10 @@ class InficonVGC502(HardwareDeviceBase):
         try:
             self._send_command(command)
         except DeviceConnectionError:
-            self.logger.error("Connection error: %s", command)
+            self.report_error(f"Connection error: {command}")
             raise
         except OSError as e:
-            self.logger.error("Failed to send command: %s", e)
+            self.report_error(f"Failed to send command: {e}")
             raise DeviceConnectionError("Write failed") from e
 
         # Read acknowledgment line (controller typically replies with ACK/NAK ending CRLF)
@@ -281,7 +285,7 @@ class InficonVGC502(HardwareDeviceBase):
             value = float(parts[1])
             return value
         except (IndexError, ValueError, AttributeError) as e:
-            self.logger.error("Failed to parse response: %s", e)
+            self.report_error(f"Failed to parse response: {e}")
             return sys.float_info.max
 
     def get_atomic_value(self, item: str ="") -> float:
@@ -299,7 +303,7 @@ class InficonVGC502(HardwareDeviceBase):
                 gauge_num = int(item.split("pressure")[-1])
                 value = self.read_pressure(gauge=gauge_num)
             except ValueError:
-                self.logger.error("Invalid item: %s", item)
+                self.report_error(f"Invalid item: {item}")
                 value = sys.float_info.max
         elif "temperature" in item:
             value = float(self.read_temperature())
@@ -307,7 +311,7 @@ class InficonVGC502(HardwareDeviceBase):
             self.get_pressure_unit()
             value = self.pressure_units
         else:
-            self.logger.error("Unknown item received: %r", item)
+            self.report_error(f"Unknown item: {item}")
             value = sys.float_info.max
         return value
 
