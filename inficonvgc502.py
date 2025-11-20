@@ -49,7 +49,7 @@ class InficonVGC502(HardwareSensorBase):
 
                 except OSError as e:
                     if e.errno == EISCONN:
-                        self.logger.info("Already connected")
+                        self.report_info("Already connected")
                         self._set_connected(True)
                     else:
                         self.report_error(f"Connection error: {e.strerror}")
