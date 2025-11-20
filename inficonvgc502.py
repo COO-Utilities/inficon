@@ -82,6 +82,7 @@ class InficonVGC502(HardwareSensorBase):
             if self.sock:
                 self.sock.close()
             self._set_connected(False)
+            self.report_info("Disconnected from controller")
         except Exception as ex:
             raise IOError(f"Failed to close connection: {ex}") from ex
 
