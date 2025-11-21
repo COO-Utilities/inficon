@@ -6,7 +6,7 @@ import socket
 from errno import EISCONN
 from typing import Union
 
-from hardware_device_base.hardware_sensor_base import HardwareSensorBase
+from hardware_device_base import HardwareSensorBase
 
 
 class InficonVGC502(HardwareSensorBase):
