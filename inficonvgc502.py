@@ -78,7 +78,7 @@ class InficonVGC502(HardwareSensorBase):
     def disconnect(self) -> None:
         """Close the TCP connection."""
         try:
-            self.logger.debug("Closing connection to controller")
+            self.report_debug("Closing connection to controller")
             if self.sock:
                 self.sock.close()
             self._set_connected(False)
@@ -97,20 +97,20 @@ class InficonVGC502(HardwareSensorBase):
             self.report_error("Controller not connected")
             return False
         try:
-            self.logger.debug("Sending command: %s", command)
+            self.report_debug(f"Sending command: {command}")
             command += "\r\n"
             with self.lock:
                 self.sock.sendall(command.encode())
         except Exception as ex:
             self.report_error(f"Failed to send command: {ex}")
             raise IOError(f"Failed to send command: {ex}") from ex
-        self.logger.debug("Command sent")
+        self.report_debug("Command sent")
         return True
 
     def _send_enq(self) -> bool:
         """Send ENQ to the controller."""
         try:
-            self.logger.debug("Sending ENQ to controller")
+            self.report_debug("Sending ENQ to controller")
             with self.lock:
                 self.sock.sendall(b"\x05")
         except Exception as ex:
@@ -132,7 +132,7 @@ class InficonVGC502(HardwareSensorBase):
                     break
                 if len(buf) >= max_bytes:
                     break
-                # self.logger.debug("Input buffer: %r", buf)
+                # self.report_debug("Input buffer: %r", buf)
             return bytes(buf)
         except Exception as ex:
             raise IOError(f"Failed to _read_until: {ex}") from ex
@@ -144,14 +144,14 @@ class InficonVGC502(HardwareSensorBase):
         else:
             try:
                 ack = self._read_until(b"\r\n").strip()
-                self.logger.debug("Reply received: %r", ack)
+                self.report_debug(f"Reply received: {ack}")
             except socket.timeout:
                 self.report_error("Socket timeout")
                 return None
 
             # ACK received
             if ack == b"\x06":
-                self.logger.debug("ACK received, sending ENQ")
+                self.report_debug("ACK received, sending ENQ")
                 try:
                     if self._send_enq():
                         response = self._read_until(b"\r\n").decode().strip()
@@ -165,7 +165,7 @@ class InficonVGC502(HardwareSensorBase):
                     self.report_error(f"IO error while receiving response: {e}")
                     return None
 
-                self.logger.debug("Response received: %s", response)
+                self.report_debug(f"Response received: {response}")
                 return response
 
             if ack == b'\x15':
@@ -176,7 +176,7 @@ class InficonVGC502(HardwareSensorBase):
 
     def initialize(self) -> None:
         """Initialize the controller."""
-        self.logger.debug("Initializing controller")
+        self.report_debug("Initializing controller")
         if self._send_command("UNI"):
             unit_code = int(self._read_reply())
             if 0 <= unit_code <= 5:
@@ -247,7 +247,7 @@ class InficonVGC502(HardwareSensorBase):
             raise DeviceConnectionError("Write failed") from e
 
         response = self._read_reply()
-        self.logger.debug("Temperature response: %s", response)
+        self.report_debug(f"Temperature response: {response}")
         try:
             value = float(response)
             return value
@@ -278,7 +278,7 @@ class InficonVGC502(HardwareSensorBase):
 
         # Read acknowledgment line (controller typically replies with ACK/NAK ending CRLF)
         response = self._read_reply()
-        self.logger.debug("Pressure response: %s", response)
+        self.report_debug(f"Pressure response: {response}")
 
         # Expected like: "PR1,<value>"
         try:
