@@ -174,7 +174,7 @@ class InficonVGC502(HardwareSensorBase):
                 self.report_error("ACK NOT received")
         return None
 
-    def initialize(self) -> None:
+    def initialize(self) -> bool:
         """Initialize the controller."""
         self.report_debug("Initializing controller")
         if self._send_command("UNI"):
@@ -182,8 +182,8 @@ class InficonVGC502(HardwareSensorBase):
             if 0 <= unit_code <= 5:
                 self.pressure_units = self.UNIT_CODES[unit_code]
         if self._send_command("AYT"):
-            devinfo = self._read_reply()
-            dev_items = devinfo.split(",")
+            dev_info = self._read_reply()
+            dev_items = dev_info.split(",")
             if len(dev_items) == 5:
                 self.type = dev_items[0]
                 self.model = dev_items[1]
@@ -192,13 +192,15 @@ class InficonVGC502(HardwareSensorBase):
                 self.hardware_version = dev_items[4]
                 try:
                     self.n_gauges = int(self.type[-1])
+                    self.initialized = True
                 except ValueError:
                     self.report_error(f"Invalid gauge type, unable to parse n_gauges: {self.type}")
                     self.n_gauges = 0
             else:
-                self.report_error(f"Error initializing controller: {devinfo}")
+                self.report_error(f"Error initializing controller: {dev_info}")
         else:
             self.report_error("Failed to initialize controller")
+        return self.initialized
 
     def set_pressure_unit(self, unit_code: int =1) -> bool:
         """ Set the pressure units
@@ -259,7 +261,7 @@ class InficonVGC502(HardwareSensorBase):
         """Read pressure from gauge 1 to n.
         Returns float, or sys.float_info.max on timeout/parse error."""
         # pylint: disable=too-many-branches
-        if self.n_gauges == 0:
+        if not self.is_initialized():
             self.initialize()
         if not isinstance(gauge, int) or gauge < 1 or gauge > self.n_gauges:
             self.report_error(f"gauge number must be between 1 and {self.n_gauges}, inclusive")
