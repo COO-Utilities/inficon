@@ -42,3 +42,32 @@ To run all tests from the projecgt root:
 ```bash
 python -m pytest
 ```
+
+## Class Diagram
+
+Below is a class diagram of the added methods and attributes for the Inficon.
+See the README for the hardware_device_base module for the inherited methods and
+attributes.
+
+```mermaid
+classDiagram
+    class InficonVGC502 {
+        +Int timeout
+        +Str type
+        +Str model
+        +Str serial_number
+        +Str firmware_version
+        +Str hardware_version
+        +Str pressure_units
+        +Int n_gauges
+        +socket sock
+        _clear_socket()
+        _send_enq() bool
+        _read_until() bytes
+        +set_pressure_unit() bool
+        +get_pressure_unit() str
+        +read_temperature() float
+        +read_pressure() float
+        run_manually()
+    }
+```
