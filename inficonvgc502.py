@@ -237,7 +237,7 @@ class InficonVGC502(HardwareSensorBase):
         return received
 
     def read_temperature(self) -> float:
-        """ Read temperature from controller."""
+        """ Read temperature from controller in degrees Celsius."""
         command = "TMP"
         try:
             self._send_command(command)
