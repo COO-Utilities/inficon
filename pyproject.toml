@@ -14,7 +14,7 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.7"
 dependencies = [
-    "hardware_device_base@git+https://github.com/COO-Utilities/hardware_device_base@v1.0.0",
+    "hardware_device_base@git+https://github.com/COO-Utilities/hardware_device_base@v1.0.1",
     "keyring",
     "pipython",
     "pyserial",
