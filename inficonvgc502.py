@@ -54,6 +54,7 @@ class InficonVGC502(HardwareSensorBase):
                     else:
                         self.report_error(f"Connection error: {e.strerror}")
                         self._set_connected(False)
+                        raise DeviceConnectionError("Connection failed") from e
                 # clear socket
                 if self.is_connected():
                     self._clear_socket()
